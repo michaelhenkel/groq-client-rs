@@ -1,5 +1,5 @@
 [package]
-name = "groq-rs"
+name = "groq-client-rs"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env, error::Error};
 
-use groq_rs::chat::*;
+use groq_client_rs::chat::*;
 use serde_json::json;
 //use tokio_stream::StreamExt;
 
