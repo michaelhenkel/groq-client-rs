@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::{self, Display}, pin::Pin, task::{Context, Poll}};
+use std::{env, error::Error, fmt::{self, Display}, pin::Pin, task::{Context, Poll}};
 use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -38,6 +38,7 @@ pub trait BoxUnpinExt: Stream + Sized + Send + 'static {
 
 impl<T: Stream + Sized + Send + 'static> BoxUnpinExt for T {}
 
+#[derive(Clone)]
 pub struct Chat {
     api_key: String,
     api_url: String,
@@ -53,6 +54,14 @@ impl Chat {
         }
     }
 
+    pub fn set_chat_messages(&mut self, messages: Vec<ChatMessage>) {
+        self.chat_request.messages = messages;
+    }
+
+    pub fn get_chat_messages(&self) -> Vec<ChatMessage> {
+        self.chat_request.messages.clone()
+    }
+
     pub fn set_api_url(&mut self, api_url: String) {
         self.api_url = api_url;
     }
@@ -63,6 +72,33 @@ impl Chat {
 
     pub fn add_chat_message(&mut self, message: ChatMessage) {
         self.chat_request.messages.push(message);
+    }
+
+    pub fn clear_chat_messages(&mut self) {
+        self.chat_request.messages.clear();
+    }
+
+    pub fn remove_last_n_chat_messages(&mut self, n: usize) {
+        self.chat_request.messages.truncate(self.chat_request.messages.len() - n);
+    }
+
+    pub fn remove_first_n_chat_messages(&mut self, n: usize) {
+        let to_remove = n.min(self.chat_request.messages.len());
+        self.chat_request.messages.drain(0..to_remove);
+    }
+
+    pub fn remove_last_chat_message(&mut self) {
+        self.chat_request.messages.pop();
+    }
+
+    pub fn number_of_chat_messages(&self) -> usize {
+        self.chat_request.messages.len()
+    }
+
+    pub fn remove_first_chat_message(&mut self) {
+        if !self.chat_request.messages.is_empty() {
+            self.chat_request.messages.remove(0);
+        }
     }
 
     pub fn set_frequency_penalty(&mut self, frequency_penalty: f32) -> Result<(), String> {
@@ -113,6 +149,14 @@ impl Chat {
         Ok(())
     }
 
+    pub fn set_top_p(&mut self, top_p: f32) -> Result<(), String> {
+        if top_p < 0.0 || top_p > 1.0 {
+            return Err("Top P must be between 0.0 and 1.0".to_string());
+        }
+        self.chat_request.top_p = top_p;
+        Ok(())
+    }
+
     pub fn set_tool_choice(&mut self, tool_choice: ToolChoice) {
         self.chat_request.tool_choice = Some(tool_choice);
     }
@@ -121,19 +165,52 @@ impl Chat {
         self.chat_request.tools.push(tool);
     }
 
-    pub async fn send(&self) -> Result<ChatResponse, Box<dyn Error + Send + Sync>> {
-        let client = reqwest::Client::new();
+    pub fn clear_tools(&mut self) {
+        self.chat_request.tools.clear();
+    }
 
+    pub fn get_temperature(&self) -> f32 {
+        self.chat_request.temperature
+    }
+
+    pub fn get_model(&self) -> String {
+        self.chat_request.model.clone()
+    }
+
+    pub fn get_frequency_penalty(&self) -> f32 {
+        self.chat_request.frequency_penalty
+    }
+
+    pub fn get_presence_penalty(&self) -> f32 {
+        self.chat_request.presence_penalty
+    }
+
+    pub fn get_top_p(&self) -> f32 {
+        self.chat_request.top_p
+    }
+
+    pub async fn send(&self) -> Result<ChatResponse, Box<dyn Error + Send + Sync>> {
+        let mut client_builder = reqwest::Client::builder();
+        if let Ok(proxy) = env::var("HTTPS_PROXY"){
+            client_builder = client_builder.proxy(reqwest::Proxy::all(proxy)?);
+        }
+        let client = client_builder.build()?;
         let body = serde_json::to_string(&self.chat_request)?;
-        let response = client
+        let response = match client
             .post(self.api_url.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .body(body)
             .send()
-            .await?;
+            .await{
+                Ok(response) => response,
+                Err(e) => {
+                    return Err(Box::new(e));
+                }
+            };
         if response.status().is_client_error() {
             let raw_response = response.text().await?;
+            eprintln!("{}", raw_response);
             let chat_error = serde_json::from_str::<ChatError>(&raw_response)?;
             return Err(Box::new(chat_error));
         }
@@ -192,38 +269,36 @@ impl Chat {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ChatMessage {
     pub role: ChatRole,
     pub content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ToolCall {
     pub id: String,
     pub r#type: ToolType,
     pub function: ToolCallFunction,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ToolCallFunction {
     pub name: String,
     pub arguments: String,
 }
 
-/*
-choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_qgjp","type":"function","function":{"name":"send_configuration","arguments":"{\"configuration\":\"nx-os device:\\ninterface ethernet 1/1\\nip address 2001::1/64\\n\"}"}}]},"logprobs":null,"finish_reason":"tool_calls"}]
-
-*/
-
 impl ChatMessage {
-    pub fn new(role: ChatRole, content: &str) -> Self {
+    pub fn new(role: ChatRole, content: &str, tool_call_id: Option<String>) -> Self {
         Self {
             role,
             content: Some(content.to_string()),
             tool_calls: None,
+            tool_call_id,
         }
     }
 }
@@ -280,6 +355,7 @@ pub struct ChatRequest {
     service_tier: Option<ChatServiceTier>,
     stream: bool,
     temperature: f32,
+    top_p: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_choice: Option<ToolChoice>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -301,6 +377,7 @@ impl ChatRequest {
             service_tier: None,
             stream: false,
             temperature: 1.0,
+            top_p: 1.0,
             tool_choice: None,
             tools: vec![],
         }
@@ -367,15 +444,16 @@ pub enum ToolType {
     Function
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")] 
 pub enum ChatRole {
     User,
     Assistant,
     System,
+    Tool,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ChatResponse {
     pub id: String,
     pub object: String,
@@ -387,7 +465,7 @@ pub struct ChatResponse {
     pub x_groq: ChatXGroq,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Debug)]
 pub struct ChatChoice {
     pub index: u64,
     pub message: ChatMessage,
@@ -424,7 +502,7 @@ impl<'de> Deserialize<'de> for ChatChoice {
 }
 
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ChatUsage {
     pub queue_time: f64,
     pub prompt_tokens: u64,
@@ -435,7 +513,7 @@ pub struct ChatUsage {
     pub total_time: f64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ChatXGroq {
     pub id: String,
 }

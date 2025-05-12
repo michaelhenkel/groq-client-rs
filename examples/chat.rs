@@ -2,14 +2,13 @@ use std::{collections::HashMap, env, error::Error};
 
 use groq_client_rs::chat::*;
 use serde_json::json;
-//use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
-    let mut function_map: HashMap<String, fn(String)> = HashMap::new();
-    function_map.insert("configure_cisco_switch".to_string(), configure_cisco_switch);
-    function_map.insert("configure_juniper_switch".to_string(), configure_juniper_switch);
+    let mut function_map: HashMap<String, fn(String) -> Result<String, Box<dyn Error + Send + Sync>>> = HashMap::new();
+    function_map.insert("run_tool1".to_string(), run_tool1);
+    function_map.insert("run_tool2".to_string(), run_tool2);
 
     let api_key = env::var("GROQ_API_KEY").expect("GROQ_API_KEY is not set");
     let mut chat = Chat::new(
@@ -28,12 +27,14 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         Functions must be named exactly as in the list of tools.
         Functions are written in Rust.
         Don't output any commentary or markdown.
-        "#
+        "#,
+        None
     ));
 
     chat.add_chat_message(ChatMessage::new(
         ChatRole::User,
-        "configure unnumbered bgp on the cisco nexus 9000 switch using interface Ethernet1/1"
+        "configure unnumbered bgp on the cisco nexus 9000 switch using interface Ethernet1/1",
+        None
     ));
 
     
@@ -69,31 +70,37 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     });
     
 
-
-    let response = chat.send().await?;
-    if let Some(tool_calls) = &response.choices[0].message.tool_calls {
-        for tool_call in tool_calls {
-            let function_name = tool_call.function.name.clone();
-            if let Some(function) = function_map.get(&function_name) {
-                function(tool_call.function.arguments.clone());
+    loop {
+        let response = chat.send().await?;
+        if let Some(tool_calls) = &response.choices[0].message.tool_calls {
+            for tool_call in tool_calls {
+                let function_name = tool_call.function.name.clone();
+                if let Some(function) = function_map.get(&function_name) {
+                    let result = function(tool_call.function.arguments.clone())?;
+                    let tool_response = ChatMessage::new(
+                        ChatRole::Tool,
+                        &result,
+                        Some(tool_call.id.clone()),
+                    );
+                    chat.add_chat_message(tool_response);
+                }
             }
+        } else {
+            println!("{:?}", response.choices[0].message.content);
+            break;
         }
     }
 
-    /*
-    let mut stream = chat.stream().await?;
-    while let Some(chat_response) = stream.try_next().await? {
-        println!("{}", chat_response.choices[0].message.content);
-    }
-    */
     
     Ok(())
 }
 
-fn configure_cisco_switch(configuration: String) {
+fn run_tool1(configuration: String) -> Result<String, Box<dyn Error + Send + Sync>> {
     println!("{}", configuration);
+    Ok("result from tool1".to_string())
 }
 
-fn configure_juniper_switch(configuration: String) {
+fn run_tool2(configuration: String) -> Result<String, Box<dyn Error + Send + Sync>> {
     println!("{}", configuration);
+    Ok("result from tool2".to_string())
 }
