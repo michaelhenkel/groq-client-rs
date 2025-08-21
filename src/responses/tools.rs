@@ -1,44 +1,11 @@
 use serde::{Deserialize, Serialize};
+use crate::responses::{mcp, function};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Tool {
-    McpTool(McpTool),
+    McpTool(mcp::McpTool),
+    Function(function::Function),
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpTool {
-    pub name: String,
-    pub server_label: String,
-    pub server_url: String,
-    #[serde(rename = "type")]
-    pub r#type: McpToolType,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub allowed_tools: Option<McpToolAllowedTools>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub headers: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub server_description: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum McpToolAllowedTools {
-    McpAllowedTools(Vec<String>),
-    McpAllowedToolsFilter(McpAllowedToolsFilter),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpAllowedToolsFilter {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_names: Option<Vec<String>>,
-}
-
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum McpToolType {
-    #[serde(rename = "mcp")]
-    Mcp,
-}
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ToolChoice {
@@ -62,22 +29,9 @@ pub enum AllowedToolsType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AllowedToolsTool {
-    AllowedToolsToolMcp(AllowedToolsToolMcp),
+    AllowedToolsToolMcp(mcp::AllowedToolsToolMcp),
+    AllowedToolsToolFunction(function::AllowedToolsToolFunction),
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AllowedToolsToolMcp {
-    pub server_label: String,
-    #[serde(rename = "type")]
-    pub r#type: AllowedToolsToolMcpType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AllowedToolsToolMcpType {
-    #[serde(rename = "mcp")]
-    Mcp,
-}
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AllowedToolsToolChoiceMode {

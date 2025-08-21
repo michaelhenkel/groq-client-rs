@@ -32,6 +32,10 @@ impl Responses {
         }
     }
 
+    pub fn set_system_prompt(&mut self, system_prompt: String) {
+        self.request.instructions = Some(system_prompt);
+    }
+
     pub fn set_instructions(&mut self, instructions: String) {
         self.request.instructions = Some(instructions);
     }

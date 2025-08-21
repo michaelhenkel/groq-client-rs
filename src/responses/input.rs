@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::responses::mcp;
+use crate::responses::{mcp, function};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Input {
@@ -33,6 +33,8 @@ pub enum Item {
     OutputMessage(OutputMessage),
     McpListTools(mcp::McpListTools),
     McpToolCall(mcp::McpToolCall),
+    FunctionToolCall(function::FunctionToolCall),
+    FunctionToolCallOutput(function::FunctionToolCallOutput),
 }
 
 
@@ -76,7 +78,7 @@ pub struct OutputText {
     pub r#type: OutputTextType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InputMessage {
     pub content: InputContent,
     pub role: Role,
@@ -85,8 +87,9 @@ pub struct InputMessage {
     pub r#type: MessageType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum ItemStatus {
+    #[default]
     #[serde(rename = "in_progress")]
     InProgress,
     #[serde(rename = "completed")]
@@ -99,6 +102,12 @@ pub enum ItemStatus {
 pub enum InputContent {
     TextInput(String),
     ItemInputContentList(Vec<InputText>),
+}
+
+impl Default for InputContent {
+    fn default() -> Self {
+        Self::TextInput("".to_string())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,16 +129,18 @@ pub enum OutputTextType {
     OutputText,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum MessageType {
     #[serde(rename = "message")]
+    #[default]
     Message,
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum Role {
     #[serde(rename = "user")]
+    #[default]
     User,
     #[serde(rename = "assistant")]
     Assistant,

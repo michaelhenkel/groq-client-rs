@@ -5,3 +5,4 @@ pub mod input;
 pub mod mcp;
 pub mod common;
 pub mod tools;
+pub mod function;

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use crate::responses::{input, mcp, common, tools};
+use crate::responses::{input, mcp, common, tools, function};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
@@ -64,6 +64,7 @@ pub enum Output {
     OutputMessage(OutputMessage),
     McpToolCall(mcp::McpToolCall),
     McpListTools(mcp::McpListTools),
+    FunctionToolCall(function::FunctionToolCall),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
